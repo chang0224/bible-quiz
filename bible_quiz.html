@@ -476,10 +476,10 @@ function clearWrong(kind) {
   saveWrong(w);
 }
 
-// 한글 외 모두 제거 (띄어쓰기, 영문, 숫자, 구두점 무시)
+// 글자/숫자는 보존하고 띄어쓰기, 쉼표 등 구분자·구두점·기호만 무시
 function normalize(str) {
   if (!str) return '';
-  return String(str).replace(/[^가-힣가-힣]/g, '');
+  return String(str).normalize('NFC').replace(/[^\p{L}\p{N}]/gu, '');
 }
 function isCorrect(input, answer) {
   return normalize(input) === normalize(answer);
