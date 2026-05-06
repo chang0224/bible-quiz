@@ -947,7 +947,7 @@ function renderHelm() {
   root.innerHTML = `
     <div class="card">
       <h2 style="margin-top:0;color:var(--accent)">일대일 키 그림</h2>
-      <div class="legend">12개 영역(중심 1 + 안쪽 반원 위/아래 2 + 8조각 + 외곽 림 위/아래 2)을 채우세요. 약식 표기('성품', '확신', '예수' 등)도 부분 인정됩니다.</div>
+      <div class="legend">12개 영역(중심 1 + 안쪽 반원 위/아래 2 + 8조각 + 외곽 림 위/아래 2)을 채우세요. 띄어쓰기·구두점은 무시하지만 글자는 모두 정확히 입력해야 합니다.</div>
       <div class="helm-wrap">
         <div class="helm">
           ${svg}
@@ -1007,15 +1007,11 @@ function gradeHelm() {
       ${wrongHtml}
     </div>`;
 }
-// 키 그림 채점은 부분 일치 허용 (정답이 입력에 포함되거나 그 반대)
+// 키 그림 채점은 띄어쓰기·구두점만 무시하고 모든 글자가 일치해야 함
 function matchHelm(input, answer) {
   const a = normalize(input), b = normalize(answer);
   if (!a) return false;
-  if (a === b) return true;
-  // 양방향 부분일치 (예: '성품' ↔ '하나님의 성품', '예수' ↔ '예수님')
-  if (a.length >= 2 && b.includes(a)) return true;
-  if (b.length >= 2 && a.includes(b)) return true;
-  return false;
+  return a === b;
 }
 
 // ====== 구절 본문 편집 ======
