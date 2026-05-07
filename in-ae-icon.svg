@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">인애교회 로고</title>
+  <desc id="desc">대한예수교장로회 인애교회 로고를 바탕으로 만든 홈 화면 바로가기 아이콘</desc>
+  <rect width="512" height="512" rx="96" fill="#ffffff"/>
+  <g transform="translate(52 72)">
+    <path d="M0 58 116 10v346L0 304Z" fill="#2aa7df"/>
+    <path d="M116 10 240 58v246l-124 52Z" fill="#94c83d"/>
+    <path d="M116 10v346" fill="none" stroke="#ffffff" stroke-width="22" stroke-linecap="round"/>
+    <path d="M55 144h122" fill="none" stroke="#ffffff" stroke-width="28" stroke-linecap="round"/>
+    <path d="M116 82v164" fill="none" stroke="#ffffff" stroke-width="28" stroke-linecap="round"/>
+  </g>
+  <text x="270" y="150" fill="#3b3b3b" font-family="Apple SD Gothic Neo, Malgun Gothic, sans-serif" font-size="38" font-weight="700" text-anchor="middle">대한예수교장로회</text>
+  <text x="300" y="288" fill="#333333" font-family="Apple SD Gothic Neo, Malgun Gothic, sans-serif" font-size="92" font-weight="900" text-anchor="middle">인애교회</text>
+</svg>

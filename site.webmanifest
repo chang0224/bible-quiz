@@ -1,0 +1,18 @@
+{
+  "name": "인애 1기 성경암송 퀴즈",
+  "short_name": "성경암송",
+  "description": "인애교회 성경암송 퀴즈",
+  "start_url": "./bible_quiz.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "./in-ae-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
