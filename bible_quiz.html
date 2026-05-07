@@ -639,7 +639,7 @@ function renderVerseSetup() {
 
 let verseQuizState = null;
 function startVerseQuiz(pool) {
-  verseQuizState = { pool, idx:0, results: [] };
+  verseQuizState = { pool, idx:0, results: Array(pool.length).fill(null), drafts: Array(pool.length).fill('') };
   renderVerseCard();
 }
 function renderVerseCard() {
@@ -648,33 +648,42 @@ function renderVerseCard() {
   const v = st.pool[st.idx];
   const total = st.pool.length;
   const pct = Math.round((st.idx) / total * 100);
+  const isLast = st.idx === total - 1;
+  const nextLabel = isLast ? '결과 보기' : '다음 ▶';
   root.innerHTML = `
     <div class="card">
       <div class="progress-bar"><div style="width:${pct}%"></div></div>
       <div class="meta"><span>${st.idx+1} / ${total}</span><span class="topic">${v.topic}</span></div>
       <div class="ref">${v.ref}</div>
       <div class="first-word"><strong>시작 단어</strong>${v.firstWord}</div>
-      <textarea id="ans" placeholder="여기에 구절을 이어서 입력하세요..." autofocus></textarea>
+      <textarea id="ans" placeholder="여기에 구절을 이어서 입력하세요..." autofocus>${escapeHtml(st.drafts[st.idx] || '')}</textarea>
       <div class="actions">
         <button class="btn" id="check">확인</button>
         <button class="btn secondary" id="show">정답 보기 (모름)</button>
-        <button class="btn ghost" id="skip">건너뛰기</button>
+        <button class="btn ghost" id="prev" ${st.idx===0?'disabled':''}>◀ 이전</button>
+        <button class="btn ghost" id="nav-next">${nextLabel}</button>
       </div>
       <div id="fb"></div>
     </div>
   `;
   const ans = document.getElementById('ans');
   ans.focus();
+  ans.addEventListener('input', () => {
+    st.drafts[st.idx] = ans.value;
+    if (st.results[st.idx] && st.results[st.idx].input !== ans.value) st.results[st.idx] = null;
+  });
   ans.addEventListener('keydown', e => {
     if (e.key === 'Enter' && (e.metaKey||e.ctrlKey)) { e.preventDefault(); doCheck(); }
   });
   document.getElementById('check').addEventListener('click', doCheck);
   document.getElementById('show').addEventListener('click', () => doReveal());
-  document.getElementById('skip').addEventListener('click', () => recordAndNext({ skipped:true, input:'' }));
+  document.getElementById('prev').addEventListener('click', () => moveVerse(-1));
+  document.getElementById('nav-next').addEventListener('click', () => moveVerse(1));
 
   function doCheck() {
     const input = ans.value;
     const correct = isCorrect(input, v.text);
+    recordCurrent({ correct, input });
     const fb = document.getElementById('fb');
     fb.innerHTML = `
       <div class="feedback ${correct?'correct':'wrong'}">
@@ -685,34 +694,51 @@ function renderVerseCard() {
           <div>${v.text}</div>
         </div>
         <div class="actions" style="margin-top:10px">
-          <button class="btn" id="next">다음 ▶</button>
+          <button class="btn" id="next">${nextLabel}</button>
         </div>
       </div>
     `;
-    document.getElementById('next').addEventListener('click', () => recordAndNext({ correct, input }));
+    document.getElementById('next').addEventListener('click', () => moveVerse(1));
     document.getElementById('next').focus();
   }
   function doReveal() {
+    recordCurrent({ correct:false, input:ans.value, revealed:true });
     const fb = document.getElementById('fb');
     fb.innerHTML = `
       <div class="feedback wrong">
         <span class="label">정답</span>
         <div>${v.text}</div>
         <div class="actions" style="margin-top:10px">
-          <button class="btn" id="next">다음 ▶</button>
+          <button class="btn" id="next">${nextLabel}</button>
         </div>
       </div>
     `;
-    document.getElementById('next').addEventListener('click', () => recordAndNext({ correct:false, input:ans.value, revealed:true }));
+    document.getElementById('next').addEventListener('click', () => moveVerse(1));
   }
-  function recordAndNext(rec) {
-    st.results.push({ verse: v, ...rec });
+  function recordCurrent(rec) {
+    st.drafts[st.idx] = rec.input || '';
+    st.results[st.idx] = { verse: v, ...rec };
     // 오답노트 갱신
     if (rec.correct) removeWrongVerse(v.id);
     else addWrongVerse(v.id);
-    st.idx += 1;
-    if (st.idx >= st.pool.length) renderVerseResult();
-    else renderVerseCard();
+  }
+  function moveVerse(delta) {
+    st.drafts[st.idx] = ans.value;
+    if (delta > 0 && st.idx >= st.pool.length - 1) {
+      finalizeVerseQuiz();
+      return;
+    }
+    st.idx = Math.max(0, Math.min(st.pool.length - 1, st.idx + delta));
+    renderVerseCard();
+  }
+  function finalizeVerseQuiz() {
+    st.results = st.pool.map((verse, i) => {
+      if (st.results[i]) return st.results[i];
+      const rec = { verse, correct:false, input:st.drafts[i] || '', skipped:true };
+      addWrongVerse(verse.id);
+      return rec;
+    });
+    renderVerseResult();
   }
 }
 function renderVerseResult() {
