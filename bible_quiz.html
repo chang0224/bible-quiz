@@ -121,15 +121,47 @@
     gap: 8px;
   }
   .book-row {
-    display: grid; grid-template-columns: 30px 1fr auto; gap: 6px; align-items: center;
+    display: grid; grid-template-columns: 50px 1fr auto; gap: 6px; align-items: center;
+    position: relative;
   }
-  .book-row .num { color: var(--muted); font-size: 13px; text-align: right; }
+  .book-row .num {
+    color: var(--muted); font-size: 13px; text-align: right;
+    cursor: grab; user-select: none; -webkit-user-select: none;
+    touch-action: none;
+    padding: 4px 6px;
+    border-radius: 4px;
+    transition: background 0.15s, color 0.15s;
+    white-space: nowrap;
+  }
+  .book-row .num::before {
+    content: "⋮⋮"; display: inline-block; margin-right: 5px;
+    color: var(--muted); opacity: 0.55; letter-spacing: -3px;
+    font-size: 12px; vertical-align: 1px;
+  }
+  .book-row .num:hover { background: rgba(107, 79, 42, 0.08); color: var(--accent); }
+  .book-row .num:hover::before { opacity: 0.9; color: var(--accent); }
+  .book-row.dragging .num,
+  .book-row .num:active { cursor: grabbing; }
   .book-row .mark { font-size: 13px; white-space: nowrap; }
   .book-row .mark.ok { color: var(--good); }
   .book-row .mark.ng { color: var(--bad); font-weight: 600; }
   .book-row input { padding: 6px 8px; font-size: 14px; min-width: 0; }
   .book-row input.ok { border-color: var(--good); background: #ecf7ee; }
   .book-row input.ng { border-color: var(--bad); background: #fbecec; }
+  .book-row.dragging {
+    background: var(--paper);
+    box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+    border: 1px solid var(--accent-soft);
+    border-radius: 6px;
+    padding: 2px 6px;
+  }
+  .book-row.drop-placeholder {
+    background: rgba(200, 163, 106, 0.12);
+    border: 2px dashed var(--accent-soft);
+    border-radius: 6px;
+    box-sizing: border-box;
+  }
+  .book-row.drop-placeholder > * { visibility: hidden; }
 
   .mnemonic {
     background: linear-gradient(145deg, #fff8ed 0%, #faecd0 100%);
@@ -827,7 +859,7 @@ function renderBookQuiz(scope) {
   root.innerHTML = `
     <div class="card">
       <h2 style="margin-top:0;color:var(--accent)">성경 66권 목록</h2>
-      <div class="legend">각 빈칸에 책 이름을 입력하세요. 한 번에 채점됩니다.</div>
+      <div class="legend">각 빈칸에 책 이름을 입력하세요. <b>번호 부분을 마우스/손가락으로 드래그</b>하여 행의 순서를 바꿀 수 있습니다. 한 번에 채점됩니다.</div>
       <div class="two-cols">
         ${showOT ? otCol() : ''}
         ${showNT ? ntCol() : ''}
@@ -841,6 +873,7 @@ function renderBookQuiz(scope) {
     </div>
   `;
   document.getElementById('grade').addEventListener('click', () => gradeBooks(showOT, showNT));
+  enableBookRowDrag();
   // Tab navigation already handled by browser
 }
 function otCol() {
@@ -890,6 +923,175 @@ function gradeBooks(showOT, showNT) {
       ${wrongHtml}
     </div>`;
   fb.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+// ====== 성경 66권 행 드래그 정렬 ======
+// 각 행의 .num(번호 + ⋮⋮)을 드래그 핸들로 사용. 같은 컬럼(구약/신약) 안에서만
+// 행 순서를 재배치할 수 있도록 한다. 드롭 후에는 번호와 data-i를 새 위치 기준으로
+// 다시 매겨서 채점이 새로운 순서대로 이뤄지도록 한다. 채점 후 드래그가 시작되면
+// 직전 채점 표시(✓/✗, ok/ng)는 더 이상 유효하지 않으므로 함께 제거한다.
+function enableBookRowDrag() {
+  if (!root) return;
+  root.querySelectorAll('.two-cols > div').forEach(col => { attachBookColumnDrag(col); });
+}
+
+function attachBookColumnDrag(col) {
+  let draggingRow = null;
+  let placeholder = null;
+  let activePointerId = null;
+  let pendingRow = null;
+  let startX = 0, startY = 0;
+  let offsetX = 0, offsetY = 0;
+  let columnRect = null;
+  const DRAG_THRESHOLD = 4;
+
+  function getHandle(target) {
+    if (!target || !target.closest) return null;
+    return target.closest('.num');
+  }
+
+  function onPointerDown(e) {
+    if (e.button !== undefined && e.button !== 0) return; // 좌클릭/터치만
+    const handle = getHandle(e.target);
+    if (!handle) return;
+    const row = handle.closest('.book-row');
+    if (!row || row.parentElement !== col) return;
+
+    activePointerId = e.pointerId;
+    pendingRow = row;
+    startX = e.clientX;
+    startY = e.clientY;
+    e.preventDefault();
+    try { handle.setPointerCapture(e.pointerId); } catch (_) {}
+
+    document.addEventListener('pointermove', onPointerMove);
+    document.addEventListener('pointerup', onPointerUp);
+    document.addEventListener('pointercancel', onPointerUp);
+  }
+
+  function onPointerMove(e) {
+    if (e.pointerId !== activePointerId) return;
+    if (!draggingRow) {
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+      startDragging();
+    }
+    e.preventDefault();
+    let nextLeft = e.clientX - offsetX;
+    const nextTop = e.clientY - offsetY;
+    // 컬럼 영역에서 너무 벗어나지 않도록 약간만 제약 (수평은 컬럼 폭, 수직은 자유)
+    if (columnRect) {
+      const margin = 80;
+      nextLeft = Math.max(columnRect.left - margin, Math.min(columnRect.right - draggingRow.offsetWidth + margin, nextLeft));
+    }
+    draggingRow.style.left = `${nextLeft}px`;
+    draggingRow.style.top = `${nextTop}px`;
+    updatePlaceholderPosition(e.clientY);
+  }
+
+  function startDragging() {
+    const row = pendingRow;
+    if (!row) return;
+    const rect = row.getBoundingClientRect();
+    columnRect = col.getBoundingClientRect();
+    offsetX = startX - rect.left;
+    offsetY = startY - rect.top;
+
+    // 직전 채점 표시는 순서가 바뀌면 더 이상 유효하지 않으므로 제거
+    clearBookMarksInColumn(col);
+
+    placeholder = document.createElement('div');
+    placeholder.className = 'book-row drop-placeholder';
+    placeholder.style.height = `${rect.height}px`;
+    col.insertBefore(placeholder, row);
+
+    draggingRow = row;
+    row.classList.add('dragging');
+    row.style.position = 'fixed';
+    row.style.left = `${rect.left}px`;
+    row.style.top = `${rect.top}px`;
+    row.style.width = `${rect.width}px`;
+    row.style.zIndex = '9999';
+    row.style.pointerEvents = 'none';
+  }
+
+  function updatePlaceholderPosition(clientY) {
+    const siblings = Array.from(col.querySelectorAll('.book-row'))
+      .filter(r => r !== draggingRow && r !== placeholder);
+    if (!siblings.length) return;
+    let inserted = false;
+    for (const sib of siblings) {
+      const r = sib.getBoundingClientRect();
+      if (clientY < r.top + r.height / 2) {
+        col.insertBefore(placeholder, sib);
+        inserted = true;
+        break;
+      }
+    }
+    if (!inserted) {
+      const last = siblings[siblings.length - 1];
+      col.insertBefore(placeholder, last.nextSibling);
+    }
+  }
+
+  function onPointerUp(e) {
+    if (e.pointerId !== activePointerId) return;
+    document.removeEventListener('pointermove', onPointerMove);
+    document.removeEventListener('pointerup', onPointerUp);
+    document.removeEventListener('pointercancel', onPointerUp);
+
+    if (draggingRow) {
+      // 드롭: placeholder 위치로 행 이동
+      if (placeholder && placeholder.parentElement === col) {
+        col.insertBefore(draggingRow, placeholder);
+      }
+      cleanupDrag();
+      renumberBookRows();
+    }
+    activePointerId = null;
+    pendingRow = null;
+    columnRect = null;
+  }
+
+  function cleanupDrag() {
+    if (draggingRow) {
+      draggingRow.classList.remove('dragging');
+      draggingRow.style.position = '';
+      draggingRow.style.left = '';
+      draggingRow.style.top = '';
+      draggingRow.style.width = '';
+      draggingRow.style.zIndex = '';
+      draggingRow.style.pointerEvents = '';
+    }
+    if (placeholder?.parentElement) placeholder.parentElement.removeChild(placeholder);
+    draggingRow = null;
+    placeholder = null;
+  }
+
+  col.addEventListener('pointerdown', onPointerDown);
+}
+
+function renumberBookRows() {
+  if (!root) return;
+  root.querySelectorAll('.two-cols > div').forEach(col => {
+    col.querySelectorAll('.book-row').forEach((row, i) => {
+      const num = row.querySelector('.num');
+      if (num) num.textContent = `${i + 1}.`;
+      const inp = row.querySelector('input');
+      if (inp) inp.setAttribute('data-i', String(i));
+    });
+  });
+}
+
+function clearBookMarksInColumn(col) {
+  col.querySelectorAll('.book-row input').forEach(inp => {
+    inp.classList.remove('ok', 'ng');
+  });
+  col.querySelectorAll('.book-row .mark').forEach(mark => {
+    mark.classList.remove('ok', 'ng');
+    mark.textContent = '';
+  });
 }
 
 // ====== 키 그림 ======
