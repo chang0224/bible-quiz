@@ -529,19 +529,66 @@ function isBookCorrect(input, answer) {
   return aliases.some(a => normalize(a) === n);
 }
 
-// 채점 시 차이 표시 (한글 단위 비교)
+// 채점 시 차이 표시 (LCS 기반: 위치가 어긋나도 일치하는 부분을 인식)
+// 사용자가 정답의 가운데 일부만 맞추거나, 한 어절을 빠뜨려서 이후 글자가 밀리는
+// 경우에도 일치하는 글자를 정상으로 처리한다. 비교는 정규화된 문자열로 하되,
+// 표시는 원본 정답의 띄어쓰기/구두점을 그대로 살려서 가독성을 유지한다.
+//
+// 알고리즘: suffix LCS DP + 전방 그리디 매칭
+//   - lcs[i][j] = a[i..]와 b[j..]의 최장 공통 부분수열 길이
+//   - 0,0 부터 전방으로 진행하며 같은 글자를 만나면 즉시 매칭
+//   - 매칭이 안 될 때는 LCS를 더 손해 보지 않는 쪽으로 한 칸 이동
+//   - 동일 글자가 정답에 여러 번 나오는 경우(예: "는" 이 "믿는"과 "쓰는" 두 곳)
+//     사용자가 친 글자에 가장 가까운(앞쪽의) 위치를 ok로 표시해 시각적으로
+//     덩어리진 매칭이 자연스럽게 드러나도록 한다.
 function diffHtml(input, answer) {
-  // 단어 단위로 정렬 후 한글만 비교
   const a = normalize(input);
   const b = normalize(answer);
-  // LCS 기반 마킹은 복잡하므로 간단히 인덱스 비교
+  const original = String(answer).normalize('NFC');
+  if (!b.length) return escapeHtml(original);
+
+  const n = a.length;
+  const m = b.length;
+
+  // Suffix LCS: lcs[i][j] = LCS(a[i..n-1], b[j..m-1])
+  const lcs = Array.from({ length: n + 1 }, () => new Int32Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      if (a[i] === b[j]) lcs[i][j] = lcs[i + 1][j + 1] + 1;
+      else lcs[i][j] = Math.max(lcs[i + 1][j], lcs[i][j + 1]);
+    }
+  }
+
+  // 전방 그리디: 매칭 가능하면 즉시 매칭 → 정답의 가장 앞쪽 위치를 우선 선택
+  const inLcs = new Array(m).fill(false);
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) {
+      inLcs[j] = true;
+      i++; j++;
+    } else if (lcs[i + 1][j] > lcs[i][j + 1]) {
+      // 입력(a)의 현재 글자를 버리는 편이 더 길다 → i 만 진행
+      i++;
+    } else {
+      // 그 외(동률 포함) → 정답(b)의 현재 글자는 매칭 못함 → j 만 진행
+      j++;
+    }
+  }
+
+  // 원본 정답을 한 글자씩 순회하면서 띄어쓰기/구두점은 그대로 두고,
+  // 비교 대상 글자(letter/number)에 대해서만 ok/miss 클래스를 입힌다.
+  const SKIP = /[^\p{L}\p{N}]/u;
   let html = '';
-  const max = Math.max(a.length, b.length);
-  // answer 기준으로 표시: 입력에 같은 위치 글자가 일치하면 ok, 아니면 miss
-  for (let i = 0; i < b.length; i++) {
-    const ch = b[i];
-    if (a[i] === ch) html += `<span class="ok">${ch}</span>`;
-    else html += `<span class="miss">${ch}</span>`;
+  let bIdx = 0;
+  for (const ch of original) {
+    if (SKIP.test(ch)) {
+      html += escapeHtml(ch);
+    } else {
+      const cls = inLcs[bIdx] ? 'ok' : 'miss';
+      html += `<span class="${cls}">${escapeHtml(ch)}</span>`;
+      bIdx++;
+    }
   }
   return html;
 }
