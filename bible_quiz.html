@@ -211,18 +211,6 @@
   .review-item .your { font-size: 13px; color: var(--muted); }
   .review-item .ans { font-size: 13px; }
 
-  /* edit */
-  .edit-row {
-    border: 1px solid var(--border); border-radius: 10px; padding: 14px;
-    margin-bottom: 12px; background: #fafafa;
-  }
-  .edit-row .h {
-    display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;
-  }
-  .edit-row .ref { font-weight: 700; font-size: 15px; }
-  .edit-row .topic { font-size: 11px; }
-  .edit-row textarea { background: #fff; min-height: 80px; font-size: 14px; }
-
   /* 플래시카드 */
   .flash-stage { perspective: 1400px; margin: 8px 0 18px; }
   .flash-card {
@@ -448,23 +436,12 @@ function loadStore() {
 }
 function saveStore(s) { localStorage.setItem(STORE_KEY, JSON.stringify(s)); }
 function getVerses() {
-  const s = loadStore();
-  if (s.verses && Array.isArray(s.verses) && s.verses.length === DEFAULT_VERSES.length) return s.verses;
+  // 본문은 더 이상 사용자 편집을 받지 않는다. 항상 기본 개역개정 본문을 반환.
   return DEFAULT_VERSES.map(v => ({...v}));
-}
-function setVerses(arr) {
-  const s = loadStore();
-  s.verses = arr;
-  saveStore(s);
-}
-function resetVerses() {
-  const s = loadStore();
-  delete s.verses;
-  saveStore(s);
 }
 
 // ===== 데이터 마이그레이션 =====
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 (function migrate() {
   const s = loadStore();
   if ((s.schema|0) < 2) {
@@ -475,6 +452,11 @@ const SCHEMA_VERSION = 3;
     // 66권/키그림 오답 추적 제거 — 오답 복습은 구절 전용
     if (s.wrong) { s.wrong.books = []; s.wrong.helm = []; }
     s.schema = 3;
+  }
+  if ((s.schema|0) < 4) {
+    // 구절 본문 편집 기능 제거 — 사용자가 저장해 둔 본문은 더 이상 사용되지 않음
+    delete s.verses;
+    s.schema = 4;
   }
   saveStore(s);
 })();
@@ -707,7 +689,7 @@ function renderHome() {
   root.innerHTML = `
     <div class="home-title">
       <h2>📖 성경암송 퀴즈</h2>
-      <p>인애 1기 지도자반 — 연습용</p>
+      <p>인애 1기 지도자반</p>
     </div>
     <div class="home-grid">
       <div class="home-card" data-go="verses">
@@ -740,11 +722,6 @@ function renderHome() {
         <div class="label">구절 오답 복습 ${wrongTotal>0?`<span style="color:var(--bad);font-size:13px">(${wrongTotal})</span>`:''}</div>
         <div class="desc">${wrongTotal>0 ? `틀린 구절 ${wrongTotal}개를 다시 풀이` : '아직 오답이 없습니다'}</div>
       </div>
-      <div class="home-card" data-go="edit">
-        <span class="icon">⚙️</span>
-        <div class="label">구절 본문 편집</div>
-        <div class="desc">개역개정 본문을 수정·저장</div>
-      </div>
     </div>
   `;
   root.querySelectorAll('.home-card').forEach(el => {
@@ -755,7 +732,6 @@ function renderHome() {
       if (go==='flash') renderFlashSetup();
       if (go==='books') renderBookSetup();
       if (go==='helm') renderHelm();
-      if (go==='edit') renderEdit();
       if (go==='review') renderReview();
     });
   });
@@ -786,7 +762,7 @@ function renderVerseSetup() {
         <button class="btn" id="start">시작</button>
         <button class="btn ghost" onclick="renderHome()">취소</button>
       </div>
-      <div class="legend">채점 기준: 한글만 비교 (띄어쓰기·구두점 무시). 정답은 개역개정 기준이며, '구절 본문 편집'에서 수정할 수 있습니다.</div>
+      <div class="legend">채점 기준: 한글만 비교 (띄어쓰기·구두점 무시). 정답은 개역개정 기준입니다.</div>
     </div>
   `;
   document.getElementById('start').addEventListener('click', () => {
@@ -1438,55 +1414,6 @@ function matchHelm(input, answer) {
   const a = normalize(input), b = normalize(answer);
   if (!a) return false;
   return a === b;
-}
-
-// ====== 구절 본문 편집 ======
-function renderEdit() {
-  setBack(renderHome);
-  const verses = getVerses();
-  root.innerHTML = `
-    <div class="card">
-      <h2 style="margin-top:0;color:var(--accent)">구절 본문 편집</h2>
-      <div class="legend">개역개정판 본문이 미리 채워져 있습니다. 정확한 본문으로 직접 검토·수정하세요. 변경사항은 브라우저(localStorage)에 저장됩니다.</div>
-      <div class="actions" style="margin-bottom:14px">
-        <button class="btn" id="save">변경사항 저장</button>
-        <button class="btn ghost" id="export">JSON 내보내기</button>
-        <button class="btn ghost" id="reset">기본값으로 초기화</button>
-        <button class="btn ghost" onclick="renderHome()">홈</button>
-      </div>
-      ${verses.map((v,i) => `
-        <div class="edit-row">
-          <div class="h">
-            <span class="ref">${v.ref} <span style="color:var(--muted);font-weight:400;font-size:12px">— ${v.topic}</span></span>
-            <span class="topic">P${v.page} · 시작:'${v.firstWord}'</span>
-          </div>
-          <textarea data-i="${i}">${escapeHtml(v.text)}</textarea>
-        </div>
-      `).join('')}
-    </div>
-  `;
-  document.getElementById('save').addEventListener('click', () => {
-    const arr = getVerses();
-    root.querySelectorAll('textarea[data-i]').forEach(t => {
-      const i = Number(t.dataset.i);
-      arr[i].text = t.value;
-    });
-    setVerses(arr);
-    toast('저장되었습니다');
-  });
-  document.getElementById('export').addEventListener('click', () => {
-    const arr = getVerses();
-    const blob = new Blob([JSON.stringify(arr, null, 2)], {type:'application/json'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'verses.json'; a.click();
-    URL.revokeObjectURL(url);
-  });
-  document.getElementById('reset').addEventListener('click', () => {
-    if (confirm('기본 개역개정 본문으로 초기화합니다. 진행할까요?')) {
-      resetVerses(); renderEdit(); toast('초기화되었습니다');
-    }
-  });
 }
 
 // ====== 오답 복습 (구절 전용) ======
