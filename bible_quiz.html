@@ -692,6 +692,11 @@ function renderHome() {
       <p>인애 지도자반</p>
     </div>
     <div class="home-grid">
+      <div class="home-card" data-go="flash">
+        <span class="icon">🃏</span>
+        <div class="label">구절 플래시카드</div>
+        <div class="desc">${memCount>0 ? `외움 ${memCount}/${DEFAULT_VERSES.length} · ` : ''}앞면 힌트 → 뒷면 본문</div>
+      </div>
       <div class="home-card" data-go="verses">
         <span class="icon">✍️</span>
         <div class="label">구절 암송 퀴즈</div>
@@ -702,10 +707,10 @@ function renderHome() {
         <div class="label">구절 암송 실전</div>
         <div class="desc">한 페이지에서 20구절을 모두 입력</div>
       </div>
-      <div class="home-card" data-go="flash">
-        <span class="icon">🃏</span>
-        <div class="label">구절 플래시카드</div>
-        <div class="desc">${memCount>0 ? `외움 ${memCount}/${DEFAULT_VERSES.length} · ` : ''}앞면 힌트 → 뒷면 본문</div>
+      <div class="home-card" data-go="review" style="${wrongTotal>0?'border-color:var(--accent-soft);background:#fff8ed;':''}">
+        <span class="icon">🔁</span>
+        <div class="label">구절 오답 복습 ${wrongTotal>0?`<span style="color:var(--bad);font-size:13px">(${wrongTotal})</span>`:''}</div>
+        <div class="desc">${wrongTotal>0 ? `틀린 구절 ${wrongTotal}개를 다시 풀이` : '아직 오답이 없습니다'}</div>
       </div>
       <div class="home-card" data-go="books">
         <span class="icon">📚</span>
@@ -716,11 +721,6 @@ function renderHome() {
         <span class="icon">🛟</span>
         <div class="label">일대일 키 그림</div>
         <div class="desc">12개 영역을 채워보세요</div>
-      </div>
-      <div class="home-card" data-go="review" style="${wrongTotal>0?'border-color:var(--accent-soft);background:#fff8ed;':''}">
-        <span class="icon">🔁</span>
-        <div class="label">구절 오답 복습 ${wrongTotal>0?`<span style="color:var(--bad);font-size:13px">(${wrongTotal})</span>`:''}</div>
-        <div class="desc">${wrongTotal>0 ? `틀린 구절 ${wrongTotal}개를 다시 풀이` : '아직 오답이 없습니다'}</div>
       </div>
     </div>
   `;
